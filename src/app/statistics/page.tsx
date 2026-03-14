@@ -1,0 +1,238 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { PageLayout } from "@/components/layout/page-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MonthSelector } from "@/components/dashboard/month-selector";
+import { useTransactions } from "@/hooks/use-transactions";
+import { useCategories } from "@/hooks/use-categories";
+import { Loader2 } from "lucide-react";
+
+export default function StatisticsPage() {
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+
+  const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+
+  const { transactions: monthlyTx, loading } = useTransactions({ month: monthKey });
+  const { categories } = useCategories();
+
+  const income = monthlyTx
+    .filter((tx) => tx.type === "income")
+    .reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const expense = monthlyTx
+    .filter((tx) => tx.type === "expense")
+    .reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0);
+
+  // 카테고리별 지출 집계
+  const categoryBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tx of monthlyTx) {
+      if (tx.type === "expense") {
+        const current = map.get(tx.category_id) ?? 0;
+        map.set(tx.category_id, current + Math.abs(Number(tx.amount)));
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, amount]) => {
+        const cat = categories.find((c) => c.id === id);
+        return {
+          id,
+          name: cat?.name ?? id,
+          emoji: cat?.emoji ?? "📦",
+          amount,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
+  }, [monthlyTx, categories]);
+
+  // 결제수단별 집계
+  const paymentBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tx of monthlyTx) {
+      if (tx.type === "expense") {
+        const current = map.get(tx.payment_method) ?? 0;
+        map.set(tx.payment_method, current + Math.abs(Number(tx.amount)));
+      }
+    }
+    const labels: Record<string, { name: string; emoji: string }> = {
+      card: { name: "카드", emoji: "💳" },
+      cash: { name: "현금", emoji: "💵" },
+      transfer: { name: "계좌이체", emoji: "🏦" },
+      auto: { name: "자동이체", emoji: "🔄" },
+    };
+    return Array.from(map.entries())
+      .map(([id, amount]) => ({
+        id,
+        name: labels[id]?.name ?? id,
+        emoji: labels[id]?.emoji ?? "💰",
+        amount,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [monthlyTx]);
+
+  // 일별 지출 집계 (히트맵용)
+  const dailyExpense = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const tx of monthlyTx) {
+      if (tx.type === "expense") {
+        const day = new Date(tx.date + "T00:00:00").getDate();
+        map.set(day, (map.get(day) ?? 0) + Math.abs(Number(tx.amount)));
+      }
+    }
+    return map;
+  }, [monthlyTx]);
+
+  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+  const maxDaily = Math.max(...Array.from(dailyExpense.values()), 1);
+
+  const MONTH_LABELS = [
+    "", "1월", "2월", "3월", "4월", "5월", "6월",
+    "7월", "8월", "9월", "10월", "11월", "12월",
+  ];
+
+  return (
+    <PageLayout>
+      <h3 className="text-2xl font-bold">
+        {selectedYear}년 {MONTH_LABELS[selectedMonth]} 통계
+      </h3>
+
+      <MonthSelector
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        onChangeMonth={(y, m) => { setSelectedYear(y); setSelectedMonth(m); }}
+      />
+
+      {loading ? (
+        <Card className="border-0 bg-card rounded-2xl">
+          <CardContent className="flex items-center justify-center py-16 text-muted-foreground text-sm gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            불러오는 중...
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* 수입/지출 요약 */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card className="border-0 bg-card rounded-2xl">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground mb-1">수입</p>
+                <p className="text-lg font-bold text-category-income">
+                  +${income.toLocaleString("en-AU", { minimumFractionDigits: 2 })}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 bg-card rounded-2xl">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground mb-1">지출</p>
+                <p className="text-lg font-bold text-destructive">
+                  -${expense.toLocaleString("en-AU", { minimumFractionDigits: 2 })}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 bg-card rounded-2xl">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground mb-1">순수익</p>
+                <p className={`text-lg font-bold ${income - expense >= 0 ? "text-category-income" : "text-destructive"}`}>
+                  ${(income - expense).toLocaleString("en-AU", { minimumFractionDigits: 2 })}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 카테고리별 지출 */}
+          <Card className="border-0 bg-card rounded-2xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">카테고리별 지출</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {categoryBreakdown.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">데이터가 없습니다</p>
+              ) : (
+                categoryBreakdown.map((cat) => {
+                  const pct = expense > 0 ? Math.round((cat.amount / expense) * 100) : 0;
+                  return (
+                    <div key={cat.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <span>{cat.emoji}</span>
+                          <span className="font-medium">{cat.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">${cat.amount.toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
+                        </div>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-secondary">
+                        <div
+                          className="h-2 rounded-full bg-primary transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 결제수단별 */}
+          <Card className="border-0 bg-card rounded-2xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">결제수단별 지출</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {paymentBreakdown.map((pm) => (
+                  <div key={pm.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
+                    <span className="text-xl">{pm.emoji}</span>
+                    <div>
+                      <p className="text-sm font-medium">{pm.name}</p>
+                      <p className="text-xs text-muted-foreground">${pm.amount.toFixed(2)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 일별 지출 히트맵 */}
+          <Card className="border-0 bg-card rounded-2xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">일별 지출</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 gap-1.5">
+                {Array.from({ length: daysInMonth }, (_, i) => {
+                  const day = i + 1;
+                  const amount = dailyExpense.get(day) ?? 0;
+                  const intensity = amount > 0 ? Math.max(0.15, amount / maxDaily) : 0;
+
+                  return (
+                    <div
+                      key={day}
+                      className="aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] relative group"
+                      style={{
+                        backgroundColor: amount > 0
+                          ? `oklch(0.72 0.19 250 / ${intensity})`
+                          : "var(--secondary)",
+                      }}
+                    >
+                      <span className="text-muted-foreground">{day}</span>
+                      {amount > 0 && (
+                        <span className="font-medium text-[9px]">
+                          ${amount >= 1000 ? `${(amount / 1000).toFixed(1)}k` : Math.round(amount)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </PageLayout>
+  );
+}

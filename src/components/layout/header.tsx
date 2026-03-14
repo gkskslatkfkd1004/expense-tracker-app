@@ -1,0 +1,32 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+const PAGE_TITLES: Record<string, string> = {
+  "/": "대시보드",
+  "/transactions": "거래 내역",
+  "/upload": "업로드",
+  "/statistics": "통계",
+  "/categories": "카테고리",
+  "/settings": "설정",
+};
+
+export function Header() {
+  const pathname = usePathname();
+  const title = PAGE_TITLES[pathname] ?? "지출 관리";
+
+  return (
+    <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
+      <div className="flex items-center justify-between h-16 px-6">
+        <h2 className="text-xl font-bold">{title}</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="rounded-xl">
+            <Bell className="h-5 w-5 text-muted-foreground" />
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
