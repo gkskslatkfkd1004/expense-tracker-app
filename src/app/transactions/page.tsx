@@ -6,19 +6,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { AddTransactionDialog } from "@/components/transactions/add-transaction-dialog";
+import { MonthSelector } from "@/components/dashboard/month-selector";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 import { Loader2 } from "lucide-react";
 
 export default function TransactionsPage() {
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "manual" | "ocr" | "pdf">("all");
 
+  const monthParam = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+
   const { transactions, loading } = useTransactions({
     type: typeFilter === "all" ? undefined : typeFilter,
     search: search || undefined,
-    limit: 500,
+    month: monthParam,
+    limit: 1000,
   });
   const { categories } = useCategories();
 
@@ -61,7 +68,7 @@ export default function TransactionsPage() {
         <div>
           <h3 className="text-2xl font-bold">거래 내역</h3>
           <p className="text-sm text-muted-foreground">
-            총 {filtered.length}건 · 수입{" "}
+            {selectedYear}년 {selectedMonth}월 · 총 {filtered.length}건 · 수입{" "}
             <span className="text-category-income font-medium">
               +${totalIncome.toLocaleString("en-AU", { minimumFractionDigits: 2 })}
             </span>{" "}
@@ -73,6 +80,16 @@ export default function TransactionsPage() {
         </div>
         <AddTransactionDialog />
       </div>
+
+      {/* 월 선택 */}
+      <MonthSelector
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        onChangeMonth={(year, month) => {
+          setSelectedYear(year);
+          setSelectedMonth(month);
+        }}
+      />
 
       {/* 필터 */}
       <TransactionFilters
@@ -98,7 +115,7 @@ export default function TransactionsPage() {
             <CardContent className="flex items-center justify-center py-16 text-muted-foreground text-sm">
               {search || typeFilter !== "all" || sourceFilter !== "all"
                 ? "검색 결과가 없습니다"
-                : "거래 내역이 없습니다. PDF를 업로드해보세요!"}
+                : `${selectedYear}년 ${selectedMonth}월 거래 내역이 없습니다.`}
             </CardContent>
           </Card>
         ) : (

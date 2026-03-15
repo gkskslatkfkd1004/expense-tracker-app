@@ -25,10 +25,12 @@ type ParseResult = {
 type ReviewTransaction = ParsedTransaction & {
   id: string;
   selected: boolean;
+  fileIndex?: number;
 };
 
 type Props = {
   result: ParseResult;
+  uploadedFiles?: File[];
   onReset: () => void;
 };
 
@@ -50,7 +52,11 @@ function formatAmount(amount: number): string {
   return amount < 0 ? `-$${formatted}` : `+$${formatted}`;
 }
 
-export function ParsedTransactionReview({ result, onReset }: Props) {
+export function ParsedTransactionReview({ result, uploadedFiles = [], onReset }: Props) {
+  // 업로드된 파일의 미리보기 URL 생성
+  const [previewUrls] = useState<string[]>(() =>
+    uploadedFiles.map((file) => URL.createObjectURL(file))
+  );
   const [hideInternal, setHideInternal] = useState(true);
   const [transactions, setTransactions] = useState<ReviewTransaction[]>(() =>
     result.transactions.map((tx) => ({
@@ -103,6 +109,14 @@ export function ParsedTransactionReview({ result, onReset }: Props) {
     setTransactions((prev) =>
       prev.map((tx) =>
         tx.id === id ? { ...tx, categoryId } : tx
+      )
+    );
+  };
+
+  const updateField = (id: string, field: string, value: string | number) => {
+    setTransactions((prev) =>
+      prev.map((tx) =>
+        tx.id === id ? { ...tx, [field]: value } : tx
       )
     );
   };
@@ -315,9 +329,73 @@ export function ParsedTransactionReview({ result, onReset }: Props) {
                   </button>
                 </div>
 
-                {/* 확장 영역 - 카테고리 수정 */}
+                {/* 확장 영역 - 수정 */}
                 {isExpanded && (
                   <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
+                    {/* 영수증 사진 미리보기 */}
+                    {tx.fileIndex !== undefined && previewUrls[tx.fileIndex] && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1.5">
+                          영수증 원본
+                          {uploadedFiles[tx.fileIndex] && (
+                            <span className="ml-2 text-muted-foreground/60">
+                              ({uploadedFiles[tx.fileIndex].name})
+                            </span>
+                          )}
+                        </p>
+                        <div className="rounded-lg overflow-hidden border border-border/50 bg-secondary">
+                          <img
+                            src={previewUrls[tx.fileIndex]}
+                            alt="영수증"
+                            className="w-full max-h-64 object-contain"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = "none";
+                              const fallback = document.createElement("p");
+                              fallback.className = "text-sm text-muted-foreground p-4 text-center";
+                              fallback.textContent = "HEIC 형식은 미리보기가 지원되지 않습니다.";
+                              target.parentElement?.appendChild(fallback);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {/* 가게 이름 수정 */}
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1.5">가게 이름</p>
+                      <input
+                        type="text"
+                        value={tx.merchant}
+                        onChange={(e) => updateField(tx.id, "merchant", e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-sm border border-border/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    {/* 금액 수정 */}
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1.5">금액 ($)</p>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={Math.abs(tx.amount)}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          updateField(tx.id, "amount", tx.type === "expense" ? -val : val);
+                        }}
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-sm border border-border/50 focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+                      />
+                    </div>
+                    {/* 날짜 수정 */}
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1.5">날짜</p>
+                      <input
+                        type="date"
+                        value={tx.date}
+                        onChange={(e) => updateField(tx.id, "date", e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-sm border border-border/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    {/* 상세 내용 */}
                     <div>
                       <p className="text-xs text-muted-foreground mb-1.5">상세 내용</p>
                       <p className="text-sm">{tx.description}</p>

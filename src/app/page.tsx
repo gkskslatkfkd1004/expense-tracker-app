@@ -6,6 +6,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { Header } from "@/components/layout/header";
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { QuickIncomeDialog } from "@/components/dashboard/quick-income-dialog";
+import { QuickExpenseDialog } from "@/components/dashboard/quick-expense-dialog";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
@@ -27,7 +28,7 @@ export default function DashboardPage() {
     setSelectedMonth(month);
   };
 
-  const handleIncomeSaved = useCallback(() => {
+  const handleTransactionSaved = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
   }, []);
 
@@ -47,7 +48,10 @@ export default function DashboardPage() {
                 이번 달 지출 현황을 확인하세요
               </p>
             </div>
-            <QuickIncomeDialog onSaved={handleIncomeSaved} />
+            <div className="flex gap-2">
+              <QuickIncomeDialog onSaved={handleTransactionSaved} />
+              <QuickExpenseDialog onSaved={handleTransactionSaved} />
+            </div>
           </div>
 
           {/* 월 선택 버튼 */}

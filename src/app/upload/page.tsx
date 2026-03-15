@@ -56,16 +56,7 @@ export default function UploadPage() {
   };
 
   const handleProcess = async () => {
-    if (mode === "receipt") {
-      // TODO: OCR 로직 (향후 구현)
-      setProcessing(true);
-      setTimeout(() => setProcessing(false), 2000);
-      return;
-    }
-
-    // PDF 파싱
-    const file = uploadedFiles[0];
-    if (!file) return;
+    if (uploadedFiles.length === 0) return;
 
     setProcessing(true);
     setParseError(null);
@@ -73,21 +64,42 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
 
-      const response = await fetch("/api/parse-pdf", {
-        method: "POST",
-        body: formData,
-      });
+      if (mode === "receipt") {
+        for (const file of uploadedFiles) {
+          formData.append("files", file);
+        }
 
-      const data = await response.json();
+        const response = await fetch("/api/parse-receipt", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!response.ok) {
-        setParseError(data.error || "파싱 중 오류가 발생했습니다.");
-        return;
+        const data = await response.json();
+
+        if (!response.ok) {
+          setParseError(data.error || "영수증 분석 중 오류가 발생했습니다.");
+          return;
+        }
+
+        setParseResult(data);
+      } else {
+        formData.append("file", uploadedFiles[0]);
+
+        const response = await fetch("/api/parse-pdf", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setParseError(data.error || "파싱 중 오류가 발생했습니다.");
+          return;
+        }
+
+        setParseResult(data);
       }
-
-      setParseResult(data);
     } catch {
       setParseError("서버 연결에 실패했습니다.");
     } finally {
@@ -115,6 +127,7 @@ export default function UploadPage() {
       <PageLayout>
         <ParsedTransactionReview
           result={parseResult}
+          uploadedFiles={uploadedFiles}
           onReset={handleReset}
         />
       </PageLayout>

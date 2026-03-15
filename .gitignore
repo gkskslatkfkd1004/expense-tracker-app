@@ -39,6 +39,9 @@ yarn-error.log*
 # receipt images (large HEIC files)
 /reciept base form/
 
+# OCR trained data
+*.traineddata
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

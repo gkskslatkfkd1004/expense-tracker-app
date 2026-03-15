@@ -14,8 +14,9 @@ export type ParsedTransaction = {
   type: "income" | "expense";
   categoryId: string;
   paymentMethod: string;
-  source: "pdf";
+  source: "pdf" | "ocr";
   isInternalTransfer: boolean;
+  fileIndex?: number;
 };
 
 // Date pattern: DD MMM YYYY (e.g., "06 Jan 2026")
