@@ -39,8 +39,9 @@ yarn-error.log*
 # receipt images (large HEIC files)
 /reciept base form/
 
-# OCR trained data (Tesseract.js v7은 .gz 파일 필요)
+# OCR trained data - public/tessdata/eng.traineddata는 배포용으로 추적
 *.traineddata
+!public/tessdata/eng.traineddata
 *.traineddata.gz
 
 # typescript

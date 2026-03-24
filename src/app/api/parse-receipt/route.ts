@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
                 }
               },
               langPath: TESSDATA_PATH,
+              gzip: false,
             });
             const timeoutPromise = new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error("OCR 타임아웃 (30초)")), OCR_TIMEOUT_MS)
