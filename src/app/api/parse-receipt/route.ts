@@ -3,9 +3,13 @@ import Tesseract from "tesseract.js";
 import sharp from "sharp";
 import convert from "heic-convert";
 import { parseReceiptText, receiptToTransaction } from "@/lib/receipt-parser";
+import path from "node:path";
 
 // Allow up to 60 seconds for OCR processing
 export const maxDuration = 60;
+
+// eng.traineddata를 public/tessdata/에 두면 CDN 없이 로컬에서 로드
+const TESSDATA_PATH = path.join(process.cwd(), "public", "tessdata");
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -47,6 +51,7 @@ async function recognizeImage(buffer: Buffer, file: File): Promise<string> {
   const jpegBuffer = await toJpegBuffer(buffer, file);
   const result = await Tesseract.recognize(jpegBuffer, "eng", {
     logger: () => {},
+    langPath: TESSDATA_PATH,
   });
   return result.data.text;
 }
@@ -103,10 +108,6 @@ export async function POST(request: NextRequest) {
       pageCount: files.length,
       transactionCount: transactions.length,
       transactions,
-      debug: results.map((r) => ({
-        ocrText: r.ocrText,
-        parsed: r.receipt,
-      })),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류";

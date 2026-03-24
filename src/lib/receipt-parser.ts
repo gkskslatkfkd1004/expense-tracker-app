@@ -344,7 +344,7 @@ export function receiptToTransaction(receipt: ReceiptResult): ParsedTransaction 
     date: receipt.date,
     merchant: receipt.merchant,
     description: receipt.items.join(", ").substring(0, 100),
-    amount: -Math.abs(receipt.total),
+    amount: receipt.total > 0 ? -receipt.total : 0,
     type: "expense",
     categoryId: receipt.categoryId,
     paymentMethod: receipt.paymentMethod,
