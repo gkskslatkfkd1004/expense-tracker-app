@@ -6,28 +6,31 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, PAYMENT_METHODS } from "@/constants/categories";
+import type { Transaction } from "@/types/database";
 
 type Props = {
+  transaction: Transaction;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSaved?: () => void;
 };
 
-export function AddTransactionDialog({ onSaved }: Props) {
-  const [open, setOpen] = useState(false);
-  const [txType, setTxType] = useState<"expense" | "income">("expense");
-  const [amount, setAmount] = useState("");
-  const [merchant, setMerchant] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("card");
-  const [memo, setMemo] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+export function EditTransactionDialog({ transaction, open, onOpenChange, onSaved }: Props) {
+  const [txType] = useState<"expense" | "income">(transaction.type as "expense" | "income");
+  const [amount, setAmount] = useState(String(Math.abs(Number(transaction.amount))));
+  const [merchant, setMerchant] = useState(transaction.merchant);
+  const [categoryId, setCategoryId] = useState(transaction.category_id);
+  const [paymentMethod, setPaymentMethod] = useState(transaction.payment_method ?? "card");
+  const [memo, setMemo] = useState(transaction.description ?? "");
+  const [date, setDate] = useState(transaction.date);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const filteredCategories = CATEGORIES.filter((c) =>
@@ -36,86 +39,98 @@ export function AddTransactionDialog({ onSaved }: Props) {
       : !["salary", "allowance", "parttime"].includes(c.id)
   );
 
-  const handleSubmit = async () => {
+  const isValid = amount && Number(amount) > 0 && categoryId;
+
+  const handleSave = async () => {
     if (!isValid) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/transactions", {
-        method: "POST",
+      const res = await fetch(`/api/transactions/${transaction.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date,
-          merchant: merchant || (txType === "expense" ? "기타" : "기타"),
-          description: memo || undefined,
+          merchant: merchant || "기타",
+          description: memo || null,
           amount: Number(amount),
-          type: txType,
           category_id: categoryId,
           payment_method: paymentMethod,
-          source: "manual",
         }),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error ?? "저장에 실패했습니다");
+        throw new Error(err.error ?? "수정에 실패했습니다");
       }
-      resetForm();
-      setOpen(false);
+      onOpenChange(false);
       onSaved?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "저장에 실패했습니다");
+      setError(err instanceof Error ? err.message : "수정에 실패했습니다");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setAmount("");
-    setMerchant("");
-    setCategoryId("");
-    setMemo("");
-    setPaymentMethod("card");
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/transactions/${transaction.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "삭제에 실패했습니다");
+      }
+      onOpenChange(false);
+      onSaved?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "삭제에 실패했습니다");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const isValid = amount && Number(amount) > 0 && categoryId;
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-colors cursor-pointer">
-        <Plus className="h-4 w-4" />
-        <span>거래 추가</span>
-      </DialogTrigger>
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border rounded-2xl max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg">거래 추가</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg">거래 수정</DialogTitle>
+            <button
+              onClick={handleDelete}
+              disabled={deleting || submitting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? "삭제 중..." : "삭제"}
+            </button>
+          </div>
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
-          {/* 수입/지출 토글 */}
+          {/* 수입/지출 표시 (변경 불가) */}
           <div className="flex gap-1 bg-secondary rounded-xl p-1">
-            <button
-              onClick={() => { setTxType("expense"); setCategoryId(""); }}
+            <div
               className={cn(
-                "flex-1 py-2.5 rounded-lg text-sm font-medium transition-all",
+                "flex-1 py-2.5 rounded-lg text-sm font-medium text-center",
                 txType === "expense"
                   ? "bg-destructive/20 text-destructive"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground opacity-40"
               )}
             >
               지출
-            </button>
-            <button
-              onClick={() => { setTxType("income"); setCategoryId(""); }}
+            </div>
+            <div
               className={cn(
-                "flex-1 py-2.5 rounded-lg text-sm font-medium transition-all",
+                "flex-1 py-2.5 rounded-lg text-sm font-medium text-center",
                 txType === "income"
                   ? "bg-category-income/20 text-category-income"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground opacity-40"
               )}
             >
               수입
-            </button>
+            </div>
           </div>
 
           {/* 금액 */}
@@ -125,7 +140,6 @@ export function AddTransactionDialog({ onSaved }: Props) {
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-muted-foreground">$</span>
               <Input
                 type="number"
-                placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="pl-9 h-14 text-2xl font-bold rounded-xl bg-secondary border-0 focus-visible:ring-primary"
@@ -139,7 +153,6 @@ export function AddTransactionDialog({ onSaved }: Props) {
               {txType === "expense" ? "가맹점/상호" : "수입 출처"}
             </Label>
             <Input
-              placeholder={txType === "expense" ? "예: Woolworths" : "예: 김영균님"}
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
               className="rounded-xl bg-secondary border-0 focus-visible:ring-primary"
@@ -205,22 +218,19 @@ export function AddTransactionDialog({ onSaved }: Props) {
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">메모 (선택)</Label>
             <Input
-              placeholder="간단한 메모"
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               className="rounded-xl bg-secondary border-0 focus-visible:ring-primary"
             />
           </div>
 
-          {/* 에러 메시지 */}
           {error && (
             <p className="text-sm text-destructive text-center">{error}</p>
           )}
 
-          {/* 저장 */}
           <button
-            onClick={handleSubmit}
-            disabled={!isValid || submitting}
+            onClick={handleSave}
+            disabled={!isValid || submitting || deleting}
             className={cn(
               "w-full h-12 rounded-xl text-base font-semibold transition-colors cursor-pointer disabled:opacity-40",
               txType === "expense"
@@ -228,11 +238,7 @@ export function AddTransactionDialog({ onSaved }: Props) {
                 : "bg-category-income hover:bg-category-income/90 text-white"
             )}
           >
-            {submitting
-              ? "저장 중..."
-              : amount
-                ? `$${Number(amount).toFixed(2)} ${txType === "expense" ? "지출" : "수입"} 저장`
-                : "금액을 입력하세요"}
+            {submitting ? "저장 중..." : "수정 저장"}
           </button>
         </div>
       </DialogContent>

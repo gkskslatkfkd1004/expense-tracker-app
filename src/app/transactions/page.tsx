@@ -6,10 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { AddTransactionDialog } from "@/components/transactions/add-transaction-dialog";
+import { EditTransactionDialog } from "@/components/transactions/edit-transaction-dialog";
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 import { Loader2 } from "lucide-react";
+import type { Transaction } from "@/types/database";
 
 export default function TransactionsPage() {
   const now = new Date();
@@ -18,10 +20,11 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "manual" | "ocr" | "pdf">("all");
+  const [editTarget, setEditTarget] = useState<Transaction | null>(null);
 
   const monthParam = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
 
-  const { transactions, loading } = useTransactions({
+  const { transactions, loading, refetch } = useTransactions({
     type: typeFilter === "all" ? undefined : typeFilter,
     search: search || undefined,
     month: monthParam,
@@ -78,7 +81,7 @@ export default function TransactionsPage() {
             </span>
           </p>
         </div>
-        <AddTransactionDialog />
+        <AddTransactionDialog onSaved={refetch} />
       </div>
 
       {/* 월 선택 */}
@@ -139,7 +142,8 @@ export default function TransactionsPage() {
                       return (
                         <div
                           key={tx.id}
-                          className="flex items-center gap-3 py-3 px-1"
+                          onClick={() => setEditTarget(tx)}
+                          className="flex items-center gap-3 py-3 px-1 cursor-pointer hover:bg-secondary/50 rounded-xl transition-colors"
                         >
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-lg shrink-0">
                             {cat.emoji}
@@ -189,6 +193,15 @@ export default function TransactionsPage() {
           })
         )}
       </div>
+
+      {editTarget && (
+        <EditTransactionDialog
+          transaction={editTarget}
+          open={!!editTarget}
+          onOpenChange={(open) => { if (!open) setEditTarget(null); }}
+          onSaved={() => { setEditTarget(null); refetch(); }}
+        />
+      )}
     </PageLayout>
   );
 }

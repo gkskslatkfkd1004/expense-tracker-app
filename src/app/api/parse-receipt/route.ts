@@ -83,9 +83,7 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const ocrText = await recognizeImage(buffer, file);
-        console.log(`--- OCR [${file.name}] ---\n${ocrText}\n--- END ---`);
         const receipt = parseReceiptText(ocrText);
-        console.log(`--- PARSED [${file.name}] ---`, JSON.stringify(receipt));
         return {
           transaction: receiptToTransaction(receipt),
           ocrText,
