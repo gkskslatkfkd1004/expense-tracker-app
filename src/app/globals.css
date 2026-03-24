@@ -57,8 +57,48 @@
   --color-category-income: oklch(0.78 0.2 160);
 }
 
-/* 토스 다크모드 스타일 - 기본 테마 */
+/* 라이트 테마 */
 :root {
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.15 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
+  --primary: oklch(0.55 0.19 250);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.92 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.9 0 0);
+  --accent-foreground: oklch(0.15 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.55 0.19 250);
+
+  /* 차트 */
+  --chart-1: oklch(0.55 0.19 250);
+  --chart-2: oklch(0.58 0.18 160);
+  --chart-3: oklch(0.55 0.22 330);
+  --chart-4: oklch(0.6 0.18 55);
+  --chart-5: oklch(0.55 0.18 280);
+
+  --radius: 0.75rem;
+
+  --sidebar: oklch(0.96 0 0);
+  --sidebar-foreground: oklch(0.2 0 0);
+  --sidebar-primary: oklch(0.55 0.19 250);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.9 0 0);
+  --sidebar-accent-foreground: oklch(0.15 0 0);
+  --sidebar-border: oklch(0.88 0 0);
+  --sidebar-ring: oklch(0.55 0.19 250);
+}
+
+/* 다크 테마 */
+.dark {
   --background: oklch(0.13 0.005 260);
   --foreground: oklch(0.95 0 0);
   --card: oklch(0.18 0.005 260);

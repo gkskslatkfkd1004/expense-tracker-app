@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
-import { Loader2 } from "lucide-react";
+import { Loader2, TrendingDown, TrendingUp, Minus } from "lucide-react";
 
 export default function StatisticsPage() {
   const now = new Date();
@@ -15,17 +15,19 @@ export default function StatisticsPage() {
 
   const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
 
+  // Previous month calculation
+  const prevMonthDate = new Date(selectedYear, selectedMonth - 2, 1);
+  const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
+
   const { transactions: monthlyTx, loading } = useTransactions({ month: monthKey });
+  const { transactions: prevMonthTx, loading: prevLoading } = useTransactions({ month: prevMonthKey });
   const { categories } = useCategories();
 
-  const income = monthlyTx
-    .filter((tx) => tx.type === "income")
-    .reduce((sum, tx) => sum + Number(tx.amount), 0);
   const expense = monthlyTx
     .filter((tx) => tx.type === "expense")
     .reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0);
 
-  // 카테고리별 지출 집계
+  // 카테고리별 지출 집계 (현재 월)
   const categoryBreakdown = useMemo(() => {
     const map = new Map<string, number>();
     for (const tx of monthlyTx) {
@@ -37,15 +39,22 @@ export default function StatisticsPage() {
     return Array.from(map.entries())
       .map(([id, amount]) => {
         const cat = categories.find((c) => c.id === id);
-        return {
-          id,
-          name: cat?.name ?? id,
-          emoji: cat?.emoji ?? "📦",
-          amount,
-        };
+        return { id, name: cat?.name ?? id, emoji: cat?.emoji ?? "📦", amount };
       })
       .sort((a, b) => b.amount - a.amount);
   }, [monthlyTx, categories]);
+
+  // 카테고리별 지출 집계 (이전 월)
+  const prevCategoryMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tx of prevMonthTx) {
+      if (tx.type === "expense") {
+        const current = map.get(tx.category_id) ?? 0;
+        map.set(tx.category_id, current + Math.abs(Number(tx.amount)));
+      }
+    }
+    return map;
+  }, [prevMonthTx]);
 
   // 결제수단별 집계
   const paymentBreakdown = useMemo(() => {
@@ -92,6 +101,8 @@ export default function StatisticsPage() {
     "7월", "8월", "9월", "10월", "11월", "12월",
   ];
 
+  const prevMonthLabel = MONTH_LABELS[prevMonthDate.getMonth() + 1];
+
   return (
     <PageLayout>
       <h3 className="text-2xl font-bold">
@@ -104,7 +115,7 @@ export default function StatisticsPage() {
         onChangeMonth={(y, m) => { setSelectedYear(y); setSelectedMonth(m); }}
       />
 
-      {loading ? (
+      {loading || prevLoading ? (
         <Card className="border-0 bg-card rounded-2xl">
           <CardContent className="flex items-center justify-center py-16 text-muted-foreground text-sm gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -113,38 +124,13 @@ export default function StatisticsPage() {
         </Card>
       ) : (
         <>
-          {/* 수입/지출 요약 */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="border-0 bg-card rounded-2xl">
-              <CardContent className="p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-1">수입</p>
-                <p className="text-lg font-bold text-category-income">
-                  +${income.toLocaleString("en-AU", { minimumFractionDigits: 2 })}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 bg-card rounded-2xl">
-              <CardContent className="p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-1">지출</p>
-                <p className="text-lg font-bold text-destructive">
-                  -${expense.toLocaleString("en-AU", { minimumFractionDigits: 2 })}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 bg-card rounded-2xl">
-              <CardContent className="p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-1">순수익</p>
-                <p className={`text-lg font-bold ${income - expense >= 0 ? "text-category-income" : "text-destructive"}`}>
-                  ${(income - expense).toLocaleString("en-AU", { minimumFractionDigits: 2 })}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 카테고리별 지출 */}
+          {/* 카테고리별 지출 (전월 비교 포함) */}
           <Card className="border-0 bg-card rounded-2xl">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold">카테고리별 지출</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                카테고리별 지출
+                <span className="ml-2 text-xs font-normal text-muted-foreground">vs {prevMonthLabel}</span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {categoryBreakdown.length === 0 ? (
@@ -152,6 +138,11 @@ export default function StatisticsPage() {
               ) : (
                 categoryBreakdown.map((cat) => {
                   const pct = expense > 0 ? Math.round((cat.amount / expense) * 100) : 0;
+                  const prevAmount = prevCategoryMap.get(cat.id) ?? 0;
+                  const change = prevAmount > 0
+                    ? Math.round(((cat.amount - prevAmount) / prevAmount) * 100)
+                    : null;
+
                   return (
                     <div key={cat.id} className="space-y-1.5">
                       <div className="flex items-center justify-between text-sm">
@@ -160,8 +151,18 @@ export default function StatisticsPage() {
                           <span className="font-medium">{cat.name}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">${cat.amount.toFixed(2)}</span>
-                          <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
+                          <span className="text-muted-foreground text-xs">
+                            {prevAmount > 0 ? `$${prevAmount.toFixed(0)}` : "-"}
+                          </span>
+                          <span className="text-foreground font-medium">${cat.amount.toFixed(2)}</span>
+                          {change !== null ? (
+                            <span className={`flex items-center gap-0.5 text-xs font-medium ${change > 0 ? "text-destructive" : "text-category-income"}`}>
+                              {change > 0 ? <TrendingUp className="h-3 w-3" /> : change < 0 ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                              {Math.abs(change)}%
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground w-10 text-right">{pct}%</span>
+                          )}
                         </div>
                       </div>
                       <div className="h-2 w-full rounded-full bg-secondary">

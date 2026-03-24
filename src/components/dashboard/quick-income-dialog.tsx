@@ -14,6 +14,11 @@ import { Plus, Banknote } from "lucide-react";
 
 const QUICK_AMOUNTS = [50, 100, 200, 500, 1000];
 
+function formatDateKorean(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return `${year}년 ${month}월 ${day}일`;
+}
+
 const INCOME_SOURCES = [
   { label: "급여", emoji: "💵", categoryId: "salary" },
   { label: "용돈", emoji: "💰", categoryId: "allowance" },
@@ -163,6 +168,7 @@ export function QuickIncomeDialog({ onSaved }: QuickIncomeDialogProps) {
               onChange={(e) => setDate(e.target.value)}
               className="rounded-xl bg-secondary border-0 focus-visible:ring-primary"
             />
+            <p className="text-xs text-muted-foreground px-1">{formatDateKorean(date)}</p>
           </div>
 
           {/* 메모 */}

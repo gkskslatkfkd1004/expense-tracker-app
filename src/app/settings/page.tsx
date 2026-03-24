@@ -1,20 +1,92 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { User, Database, Download, Trash2, Shield } from "lucide-react";
+import { User, Database, Download, Trash2, Shield, Palette } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+type Theme = "dark" | "light" | "system";
+
+function useTheme() {
+  const [theme, setTheme] = useState<Theme>("dark");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("theme") as Theme | null;
+    setTheme(stored ?? "dark");
+  }, []);
+
+  const applyTheme = (t: Theme) => {
+    localStorage.setItem("theme", t);
+    setTheme(t);
+    if (t === "dark") {
+      document.documentElement.classList.add("dark");
+    } else if (t === "light") {
+      document.documentElement.classList.remove("dark");
+    } else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (prefersDark) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    }
+  };
+
+  return { theme, applyTheme };
+}
 
 export default function SettingsPage() {
+  const { theme, applyTheme } = useTheme();
+
+  // 프로필
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // 데이터 초기화
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setEmail(data.user.email ?? "");
+        setDisplayName(data.user.user_metadata?.full_name ?? "");
+      }
+    });
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    setProfileMessage(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: displayName },
+      });
+      if (error) throw error;
+      setProfileMessage({ type: "success", text: "프로필이 저장되었습니다." });
+    } catch (err) {
+      setProfileMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "저장에 실패했습니다.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleResetConfirm = async () => {
     setResetting(true);
@@ -33,6 +105,10 @@ export default function SettingsPage() {
     }
   };
 
+  const initials = displayName
+    ? displayName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+    : email.slice(0, 2).toUpperCase();
+
   return (
     <PageLayout>
       <h3 className="text-2xl font-bold">설정</h3>
@@ -48,13 +124,34 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 text-primary text-2xl font-bold">
-              JK
+              {initials}
             </div>
-            <div>
-              <p className="text-lg font-semibold">Jongkon Lim</p>
-              <p className="text-sm text-muted-foreground">개인 계정</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-muted-foreground truncate">{email}</p>
+              <p className="text-xs text-muted-foreground">개인 계정</p>
             </div>
           </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">표시 이름</Label>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="이름을 입력하세요"
+              className="rounded-xl bg-secondary border-0 focus-visible:ring-primary"
+            />
+          </div>
+          {profileMessage && (
+            <p className={`text-sm ${profileMessage.type === "success" ? "text-category-income" : "text-destructive"}`}>
+              {profileMessage.text}
+            </p>
+          )}
+          <button
+            onClick={handleSaveProfile}
+            disabled={saving}
+            className="w-full h-10 rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-40 transition-colors cursor-pointer"
+          >
+            {saving ? "저장 중..." : "저장"}
+          </button>
         </CardContent>
       </Card>
 
@@ -84,6 +181,33 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">모든 거래 내역과 설정을 삭제합니다</p>
             </div>
           </button>
+        </CardContent>
+      </Card>
+
+      {/* 테마 */}
+      <Card className="border-0 bg-card rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Palette className="h-4 w-4" />
+            테마
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            {(["dark", "light", "system"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => applyTheme(t)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  theme === t
+                    ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                    : "bg-secondary text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                {t === "dark" ? "다크" : t === "light" ? "라이트" : "시스템"}
+              </button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
