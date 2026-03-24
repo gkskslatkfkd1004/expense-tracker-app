@@ -103,7 +103,7 @@ export function QuickExpenseDialog({ onSaved }: QuickExpenseDialogProps) {
         className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-destructive hover:bg-destructive/90 text-white transition-colors cursor-pointer"
       >
         <Minus className="h-4 w-4" />
-        <span className="hidden sm:inline">현금 지출 입력</span>
+        <span className="hidden sm:inline">지출 입력</span>
         <span className="sm:hidden">지출</span>
       </DialogTrigger>
 
@@ -111,7 +111,7 @@ export function QuickExpenseDialog({ onSaved }: QuickExpenseDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Wallet className="h-5 w-5 text-destructive" />
-            현금 지출 입력
+            지출 입력
           </DialogTitle>
         </DialogHeader>
 
@@ -125,7 +125,7 @@ export function QuickExpenseDialog({ onSaved }: QuickExpenseDialogProps) {
               </span>
               <Input
                 type="number"
-                placeholder="0.00"
+                placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="pl-9 h-14 text-2xl font-bold rounded-xl bg-secondary border-0 focus-visible:ring-destructive"

@@ -1,10 +1,38 @@
 "use client";
 
+import { useState } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { User, Database, Download, Trash2, Shield } from "lucide-react";
 
 export default function SettingsPage() {
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleResetConfirm = async () => {
+    setResetting(true);
+    setResetError(null);
+    try {
+      const res = await fetch("/api/transactions/reset", { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "초기화에 실패했습니다");
+      }
+      setResetDialogOpen(false);
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : "초기화에 실패했습니다");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <PageLayout>
       <h3 className="text-2xl font-bold">설정</h3>
@@ -46,7 +74,10 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">CSV 또는 Excel 형식으로 내보내기</p>
             </div>
           </button>
-          <button className="w-full flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-accent transition-colors text-left">
+          <button
+            onClick={() => setResetDialogOpen(true)}
+            className="w-full flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-accent transition-colors text-left"
+          >
             <Trash2 className="h-5 w-5 text-destructive" />
             <div>
               <p className="text-sm font-medium text-destructive">데이터 초기화</p>
@@ -90,6 +121,46 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 데이터 초기화 확인 Dialog */}
+      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <DialogContent className="bg-card border-border rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              데이터 초기화
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            <p className="text-sm text-muted-foreground">
+              모든 거래 내역이 <span className="text-destructive font-semibold">영구적으로 삭제</span>됩니다.
+              이 작업은 되돌릴 수 없습니다.
+            </p>
+
+            {resetError && (
+              <p className="text-sm text-destructive text-center">{resetError}</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setResetDialogOpen(false)}
+                disabled={resetting}
+                className="flex-1 h-10 rounded-xl text-sm font-medium bg-secondary hover:bg-accent transition-colors disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleResetConfirm}
+                disabled={resetting}
+                className="flex-1 h-10 rounded-xl text-sm font-semibold bg-destructive hover:bg-destructive/90 text-white transition-colors disabled:opacity-40"
+              >
+                {resetting ? "삭제 중..." : "전체 삭제"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
 }

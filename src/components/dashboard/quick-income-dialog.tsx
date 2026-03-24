@@ -90,7 +90,7 @@ export function QuickIncomeDialog({ onSaved }: QuickIncomeDialogProps) {
         className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-category-income hover:bg-category-income/90 text-white transition-colors cursor-pointer"
       >
         <Plus className="h-4 w-4" />
-        <span className="hidden sm:inline">현금 수입 입력</span>
+        <span className="hidden sm:inline">수입 입력</span>
         <span className="sm:hidden">수입</span>
       </DialogTrigger>
 
@@ -98,7 +98,7 @@ export function QuickIncomeDialog({ onSaved }: QuickIncomeDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Banknote className="h-5 w-5 text-category-income" />
-            현금 수입 입력
+            수입 입력
           </DialogTitle>
         </DialogHeader>
 
@@ -112,7 +112,7 @@ export function QuickIncomeDialog({ onSaved }: QuickIncomeDialogProps) {
               </span>
               <Input
                 type="number"
-                placeholder="0.00"
+                placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="pl-9 h-14 text-2xl font-bold rounded-xl bg-secondary border-0 focus-visible:ring-primary"

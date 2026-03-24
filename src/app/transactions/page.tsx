@@ -10,7 +10,7 @@ import { EditTransactionDialog } from "@/components/transactions/edit-transactio
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
-import { Loader2 } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import type { Transaction } from "@/types/database";
 
 export default function TransactionsPage() {
@@ -173,12 +173,17 @@ export default function TransactionsPage() {
 
                           <div className="text-right shrink-0">
                             <p
-                              className={`text-sm font-semibold ${
+                              className={`text-sm font-semibold flex items-center justify-end gap-0.5 ${
                                 tx.type === "income"
                                   ? "text-category-income"
                                   : "text-foreground"
                               }`}
                             >
+                              {tx.type === "income" ? (
+                                <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                              ) : (
+                                <ArrowDownLeft className="h-3.5 w-3.5 shrink-0" />
+                              )}
                               {tx.type === "income" ? "+" : "-"}$
                               {Math.abs(Number(tx.amount)).toFixed(2)}
                             </p>

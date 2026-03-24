@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 
@@ -81,12 +81,17 @@ export function RecentTransactions({ year, month }: RecentTransactionsProps) {
 
                   <div className="text-right shrink-0">
                     <p
-                      className={`text-sm font-semibold ${
+                      className={`text-sm font-semibold flex items-center justify-end gap-0.5 ${
                         tx.type === "income"
                           ? "text-category-income"
                           : "text-foreground"
                       }`}
                     >
+                      {tx.type === "income" ? (
+                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <ArrowDownLeft className="h-3.5 w-3.5 shrink-0" />
+                      )}
                       {tx.type === "income" ? "+" : "-"}$
                       {Math.abs(Number(tx.amount)).toFixed(2)}
                     </p>

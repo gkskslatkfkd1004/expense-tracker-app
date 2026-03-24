@@ -30,7 +30,7 @@ export function Header() {
       <div className="flex items-center justify-between h-16 px-6">
         <h2 className="text-xl font-bold">{title}</h2>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="rounded-xl">
+          <Button variant="ghost" size="icon" className="rounded-xl" aria-label="알림" title="알림">
             <Bell className="h-5 w-5 text-muted-foreground" />
           </Button>
           <Button
@@ -38,6 +38,7 @@ export function Header() {
             size="icon"
             className="rounded-xl"
             onClick={handleLogout}
+            aria-label="로그아웃"
             title="로그아웃"
           >
             <LogOut className="h-5 w-5 text-muted-foreground" />
