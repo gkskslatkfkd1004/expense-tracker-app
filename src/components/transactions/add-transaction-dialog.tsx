@@ -14,6 +14,11 @@ import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, PAYMENT_METHODS } from "@/constants/categories";
 
+function formatDateKorean(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return `${year}년 ${month}월 ${day}일`;
+}
+
 type Props = {
   onSaved?: () => void;
 };
@@ -199,6 +204,7 @@ export function AddTransactionDialog({ onSaved }: Props) {
               onChange={(e) => setDate(e.target.value)}
               className="rounded-xl bg-secondary border-0 focus-visible:ring-primary"
             />
+            <p className="text-xs text-muted-foreground px-1">{formatDateKorean(date)}</p>
           </div>
 
           {/* 메모 */}

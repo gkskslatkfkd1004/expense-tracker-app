@@ -14,6 +14,11 @@ import { Minus, Wallet } from "lucide-react";
 
 const QUICK_AMOUNTS = [10, 20, 50, 100, 200];
 
+function formatDateKorean(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return `${year}년 ${month}월 ${day}일`;
+}
+
 const EXPENSE_CATEGORIES = [
   { label: "식료품", emoji: "🛒", categoryId: "food" },
   { label: "외식/카페", emoji: "☕", categoryId: "eating-out" },
@@ -197,6 +202,7 @@ export function QuickExpenseDialog({ onSaved }: QuickExpenseDialogProps) {
               onChange={(e) => setDate(e.target.value)}
               className="rounded-xl bg-secondary border-0 focus-visible:ring-destructive"
             />
+            <p className="text-xs text-muted-foreground px-1">{formatDateKorean(date)}</p>
           </div>
 
           {/* 메모 */}
