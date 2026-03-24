@@ -1,19 +1,14 @@
 import { NextRequest } from "next/server";
-import Tesseract from "tesseract.js";
+import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import convert from "heic-convert";
 import { parseReceiptText, receiptToTransaction } from "@/lib/receipt-parser";
-import path from "node:path";
 
 // Allow up to 60 seconds for OCR processing
 export const maxDuration = 60;
 
-// eng.traineddata를 public/tessdata/에 두면 CDN 없이 로컬에서 로드
-const TESSDATA_PATH = path.join(process.cwd(), "public", "tessdata");
-
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_IMAGE_PX = 1500; // 서버 사이드 최대 해상도
-const OCR_TIMEOUT_MS = 30_000; // 30초
 
 const encoder = new TextEncoder();
 
@@ -111,23 +106,31 @@ export async function POST(request: NextRequest) {
 
           let ocrText: string;
           try {
-            const ocrPromise = Tesseract.recognize(jpegBuffer, "eng", {
-              logger: (m: { status: string; progress: number }) => {
-                if (m.status === "recognizing text") {
-                  send({
-                    step: "OCR 분석 중",
-                    detail: `텍스트 인식 중${label}... ${Math.round(m.progress * 100)}%`,
-                  });
-                }
-              },
-              langPath: TESSDATA_PATH,
-              gzip: false,
+            const apiKey = process.env.ANTHROPIC_API_KEY;
+            if (!apiKey) throw new Error("ANTHROPIC_API_KEY가 설정되지 않았습니다.");
+            const client = new Anthropic({ apiKey });
+            const response = await client.messages.create({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 1024,
+              messages: [{
+                role: "user",
+                content: [
+                  {
+                    type: "image",
+                    source: {
+                      type: "base64",
+                      media_type: "image/jpeg",
+                      data: jpegBuffer.toString("base64"),
+                    },
+                  },
+                  {
+                    type: "text",
+                    text: "Extract all text from this receipt image. Return only the raw text content exactly as it appears, preserving line breaks.",
+                  },
+                ],
+              }],
             });
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("OCR 타임아웃 (30초)")), OCR_TIMEOUT_MS)
-            );
-            const ocrResult = await Promise.race([ocrPromise, timeoutPromise]);
-            ocrText = ocrResult.data.text;
+            ocrText = response.content[0].type === "text" ? response.content[0].text : "";
           } catch (err) {
             const msg = err instanceof Error ? err.message : "알 수 없는 오류";
             send({ error: `OCR 실패${label}: ${msg}` });
