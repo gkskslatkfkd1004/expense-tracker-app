@@ -101,6 +101,16 @@ export default function UploadPage() {
           body: formData,
         });
 
+        if (response.status === 401) {
+          setParseError("인증이 만료되었습니다. 페이지를 새로고침하고 다시 로그인해주세요.");
+          return;
+        }
+
+        if (!response.ok) {
+          setParseError(`서버 오류가 발생했습니다. (HTTP ${response.status})`);
+          return;
+        }
+
         if (!response.body) {
           setParseError("서버 응답이 없습니다.");
           return;

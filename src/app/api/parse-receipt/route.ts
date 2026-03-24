@@ -12,6 +12,8 @@ export const maxDuration = 60;
 const TESSDATA_PATH = path.join(process.cwd(), "public", "tessdata");
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGE_PX = 1500; // 서버 사이드 최대 해상도
+const OCR_TIMEOUT_MS = 30_000; // 30초
 
 const encoder = new TextEncoder();
 
@@ -49,18 +51,11 @@ async function toJpegBuffer(buffer: Buffer, file: File): Promise<Buffer> {
 
   return sharp(input)
     .rotate() // auto-rotate based on EXIF
+    .resize(MAX_IMAGE_PX, MAX_IMAGE_PX, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 90 })
     .toBuffer();
 }
 
-async function recognizeImage(buffer: Buffer, file: File): Promise<string> {
-  const jpegBuffer = await toJpegBuffer(buffer, file);
-  const result = await Tesseract.recognize(jpegBuffer, "eng", {
-    logger: () => {},
-    langPath: TESSDATA_PATH,
-  });
-  return result.data.text;
-}
 
 export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
@@ -116,10 +111,21 @@ export async function POST(request: NextRequest) {
 
           let ocrText: string;
           try {
-            const ocrResult = await Tesseract.recognize(jpegBuffer, "eng", {
-              logger: () => {},
+            const ocrPromise = Tesseract.recognize(jpegBuffer, "eng", {
+              logger: (m: { status: string; progress: number }) => {
+                if (m.status === "recognizing text") {
+                  send({
+                    step: "OCR 분석 중",
+                    detail: `텍스트 인식 중${label}... ${Math.round(m.progress * 100)}%`,
+                  });
+                }
+              },
               langPath: TESSDATA_PATH,
             });
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("OCR 타임아웃 (30초)")), OCR_TIMEOUT_MS)
+            );
+            const ocrResult = await Promise.race([ocrPromise, timeoutPromise]);
             ocrText = ocrResult.data.text;
           } catch (err) {
             const msg = err instanceof Error ? err.message : "알 수 없는 오류";
@@ -153,7 +159,9 @@ export async function POST(request: NextRequest) {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "알 수 없는 오류";
-        console.error("Receipt parsing error:", message);
+        const stack = error instanceof Error ? error.stack : "";
+        console.error("[parse-receipt] Error:", message);
+        console.error("[parse-receipt] Stack:", stack);
         send({ error: `영수증 분석 중 오류가 발생했습니다: ${message}` });
       } finally {
         controller.close();
