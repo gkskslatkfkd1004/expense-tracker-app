@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import Tesseract from "tesseract.js";
 import sharp from "sharp";
 import convert from "heic-convert";
@@ -12,6 +12,12 @@ export const maxDuration = 60;
 const TESSDATA_PATH = path.join(process.cwd(), "public", "tessdata");
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const encoder = new TextEncoder();
+
+function sseEvent(data: object): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+}
 
 function isImageFile(file: File): boolean {
   if (file.type.startsWith("image/")) return true;
@@ -57,65 +63,109 @@ async function recognizeImage(buffer: Buffer, file: File): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const files = formData.getAll("files") as File[];
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: object) => controller.enqueue(sseEvent(data));
 
-    if (files.length === 0) {
-      return NextResponse.json(
-        { error: "영수증 이미지가 필요합니다." },
-        { status: 400 }
-      );
-    }
+      try {
+        // 1단계: 파일 수신
+        send({ step: "받는 중", detail: "파일 수신 중..." });
 
-    for (const file of files) {
-      if (!isImageFile(file)) {
-        return NextResponse.json(
-          { error: `지원하지 않는 파일 형식입니다: ${file.name}` },
-          { status: 400 }
-        );
+        const formData = await request.formData();
+        const files = formData.getAll("files") as File[];
+
+        if (files.length === 0) {
+          send({ error: "영수증 이미지가 필요합니다." });
+          return;
+        }
+
+        for (const file of files) {
+          if (!isImageFile(file)) {
+            send({ error: `지원하지 않는 파일 형식입니다: ${file.name}` });
+            return;
+          }
+          if (file.size > MAX_FILE_SIZE) {
+            send({ error: `파일 크기가 10MB를 초과합니다: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)` });
+            return;
+          }
+        }
+
+        send({ step: "파일 수신 완료", detail: `${files.length}개 파일 확인` });
+
+        // 2단계: 이미지 변환 + OCR (파일별)
+        const results = [];
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const label = files.length > 1 ? ` (${i + 1}/${files.length})` : "";
+
+          send({ step: "변환 중", detail: `이미지 변환 중${label}...` });
+
+          const arrayBuffer = await file.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+
+          let jpegBuffer: Buffer;
+          try {
+            jpegBuffer = await toJpegBuffer(buffer, file);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+            send({ error: `이미지 변환 실패${label}: ${msg}` });
+            return;
+          }
+
+          send({ step: "OCR 분석 중", detail: `텍스트 인식 중${label}...` });
+
+          let ocrText: string;
+          try {
+            const ocrResult = await Tesseract.recognize(jpegBuffer, "eng", {
+              logger: () => {},
+              langPath: TESSDATA_PATH,
+            });
+            ocrText = ocrResult.data.text;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+            send({ error: `OCR 실패${label}: ${msg}` });
+            return;
+          }
+
+          send({ step: "파싱 중", detail: `거래 정보 추출 중${label}...` });
+
+          const receipt = parseReceiptText(ocrText);
+          results.push({
+            transaction: receiptToTransaction(receipt),
+          });
+        }
+
+        const transactions = results.map((r, i) => ({
+          ...r.transaction,
+          fileIndex: i,
+        }));
+
+        // 완료
+        send({
+          done: true,
+          result: {
+            success: true,
+            fileName: files.map((f) => f.name).join(", "),
+            pageCount: files.length,
+            transactionCount: transactions.length,
+            transactions,
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "알 수 없는 오류";
+        console.error("Receipt parsing error:", message);
+        send({ error: `영수증 분석 중 오류가 발생했습니다: ${message}` });
+      } finally {
+        controller.close();
       }
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json(
-          { error: `파일 크기가 10MB를 초과합니다: ${file.name}` },
-          { status: 400 }
-        );
-      }
-    }
+    },
+  });
 
-    const results = await Promise.all(
-      files.map(async (file) => {
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const ocrText = await recognizeImage(buffer, file);
-        const receipt = parseReceiptText(ocrText);
-        return {
-          transaction: receiptToTransaction(receipt),
-          ocrText,
-          receipt,
-        };
-      })
-    );
-
-    const transactions = results.map((r, i) => ({
-      ...r.transaction,
-      fileIndex: i,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      fileName: files.map((f) => f.name).join(", "),
-      pageCount: files.length,
-      transactionCount: transactions.length,
-      transactions,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "알 수 없는 오류";
-    console.error("Receipt parsing error:", message);
-
-    return NextResponse.json(
-      { error: `영수증 분석 중 오류가 발생했습니다: ${message}` },
-      { status: 500 }
-    );
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

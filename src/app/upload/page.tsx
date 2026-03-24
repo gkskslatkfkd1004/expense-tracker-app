@@ -10,9 +10,11 @@ import {
   CheckCircle2,
   Image,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ParsedTransactionReview } from "@/components/upload/parsed-transaction-review";
+import { resizeImageFile } from "@/lib/resize-image";
 import type { ParsedTransaction } from "@/lib/pdf-parser";
 
 type UploadMode = "receipt" | "pdf";
@@ -24,11 +26,21 @@ type ParseResult = {
   transactions: ParsedTransaction[];
 };
 
+const STEP_ICONS: Record<string, string> = {
+  "받는 중": "📡",
+  "파일 수신 완료": "✅",
+  "변환 중": "🔄",
+  "OCR 분석 중": "🔍",
+  "파싱 중": "📝",
+};
+
 export default function UploadPage() {
   const [mode, setMode] = useState<UploadMode>("receipt");
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [progressStep, setProgressStep] = useState<string>("");
+  const [progressDetail, setProgressDetail] = useState<string>("");
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
 
@@ -42,6 +54,8 @@ export default function UploadPage() {
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     handleFiles(files);
+    // 같은 파일 재선택 가능하도록 초기화
+    e.target.value = "";
   };
 
   const handleFiles = (files: File[]) => {
@@ -61,30 +75,78 @@ export default function UploadPage() {
     setProcessing(true);
     setParseError(null);
     setParseResult(null);
+    setProgressStep("준비 중");
+    setProgressDetail("업로드 준비 중...");
 
     try {
       const formData = new FormData();
 
       if (mode === "receipt") {
-        for (const file of uploadedFiles) {
+        // 5번: 클라이언트 이미지 리사이즈 (HEIC 제외)
+        setProgressStep("리사이즈 중");
+        setProgressDetail("이미지 최적화 중...");
+        const resized = await Promise.all(
+          uploadedFiles.map((f) => resizeImageFile(f, 1500))
+        );
+        for (const file of resized) {
           formData.append("files", file);
         }
 
+        setProgressStep("업로드 중");
+        setProgressDetail("서버로 전송 중...");
+
+        // 4번: SSE 수신
         const response = await fetch("/api/parse-receipt", {
           method: "POST",
           body: formData,
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          setParseError(data.error || "영수증 분석 중 오류가 발생했습니다.");
+        if (!response.body) {
+          setParseError("서버 응답이 없습니다.");
           return;
         }
 
-        setParseResult(data);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.error) {
+                setParseError(data.error);
+                return;
+              }
+
+              if (data.step) {
+                setProgressStep(data.step);
+                setProgressDetail(data.detail ?? "");
+              }
+
+              if (data.done && data.result) {
+                setParseResult(data.result);
+                return;
+              }
+            } catch {
+              // JSON 파싱 실패 무시
+            }
+          }
+        }
       } else {
         formData.append("file", uploadedFiles[0]);
+
+        setProgressStep("업로드 중");
+        setProgressDetail("PDF 전송 중...");
 
         const response = await fetch("/api/parse-pdf", {
           method: "POST",
@@ -92,18 +154,19 @@ export default function UploadPage() {
         });
 
         const data = await response.json();
-
         if (!response.ok) {
           setParseError(data.error || "파싱 중 오류가 발생했습니다.");
           return;
         }
-
         setParseResult(data);
       }
-    } catch {
-      setParseError("서버 연결에 실패했습니다.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+      setParseError(`서버 연결에 실패했습니다: ${msg}`);
     } finally {
       setProcessing(false);
+      setProgressStep("");
+      setProgressDetail("");
     }
   };
 
@@ -121,7 +184,6 @@ export default function UploadPage() {
 
   const acceptType = mode === "receipt" ? "image/*,.heic" : ".pdf";
 
-  // 파싱 결과가 있으면 결과 화면을 보여줌
   if (parseResult) {
     return (
       <PageLayout>
@@ -217,9 +279,12 @@ export default function UploadPage() {
       {parseError && (
         <Card className="border-0 bg-destructive/10 rounded-2xl">
           <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-              <p className="text-sm text-destructive font-medium">{parseError}</p>
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-destructive font-semibold">업로드 실패</p>
+                <p className="text-sm text-destructive mt-0.5">{parseError}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -252,14 +317,31 @@ export default function UploadPage() {
                     {(file.size / 1024 / 1024).toFixed(1)} MB
                   </p>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeFile(i); }}
-                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  삭제
-                </button>
+                {!processing && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    삭제
+                  </button>
+                )}
               </div>
             ))}
+
+            {/* 4번: 진행 단계 표시 */}
+            {processing && progressStep && (
+              <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-primary/5 border border-primary/20">
+                <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-primary">
+                    {STEP_ICONS[progressStep] ?? "⏳"} {progressStep}
+                  </p>
+                  {progressDetail && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{progressDetail}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleProcess}
@@ -268,8 +350,8 @@ export default function UploadPage() {
             >
               {processing ? (
                 <>
-                  <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  분석 중...
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  처리 중...
                 </>
               ) : (
                 <>
